@@ -721,6 +721,30 @@ def fetch_price_history(tickers: tuple[str, ...], period: str = "5y") -> pd.Data
     return close
 
 
+def ensure_price_history_for_tickers(
+    price_history: pd.DataFrame, tickers: list[str], period: str = "5y"
+) -> pd.DataFrame:
+    requested_tickers = list(dict.fromkeys(tickers))
+    if not requested_tickers:
+        return pd.DataFrame()
+
+    missing_tickers = [
+        ticker
+        for ticker in requested_tickers
+        if ticker not in price_history.columns or price_history[ticker].dropna().empty
+    ]
+    if not missing_tickers:
+        return price_history[requested_tickers].copy()
+
+    refreshed_history = fetch_price_history(tuple(missing_tickers), period=period)
+    combined_history = pd.concat([price_history, refreshed_history], axis=1)
+    combined_history = combined_history.loc[:, ~combined_history.columns.duplicated(keep="last")]
+    available_tickers = [ticker for ticker in requested_tickers if ticker in combined_history.columns]
+    if not available_tickers:
+        return pd.DataFrame()
+    return combined_history[available_tickers].copy()
+
+
 def slice_price_history(prices: pd.DataFrame, trading_days: int) -> pd.DataFrame:
     if prices.empty:
         return prices
@@ -1178,10 +1202,13 @@ def simulate_mock_backtest(
     if df.empty:
         return df, allocation_meta
 
-    tickers = [ticker for ticker in df["ticker"].tolist() if ticker in price_history.columns]
+    simulation_history = ensure_price_history_for_tickers(
+        price_history, df["ticker"].tolist(), period="5y"
+    )
+    tickers = [ticker for ticker in df["ticker"].tolist() if ticker in simulation_history.columns]
     if not tickers:
         return pd.DataFrame(), allocation_meta
-    history = price_history[tickers].dropna(how="all").ffill()
+    history = simulation_history[tickers].dropna(how="all").ffill()
     history = history.dropna(axis=1, how="all")
     if history.empty:
         return pd.DataFrame(), allocation_meta
@@ -1258,10 +1285,13 @@ def simulate_mock_future(
     if df.empty:
         return df, pd.DataFrame(), pd.DataFrame(), allocation_meta
 
-    tickers = [ticker for ticker in df["ticker"].tolist() if ticker in price_history.columns]
+    simulation_history = ensure_price_history_for_tickers(
+        price_history, df["ticker"].tolist(), period="5y"
+    )
+    tickers = [ticker for ticker in df["ticker"].tolist() if ticker in simulation_history.columns]
     if not tickers:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), allocation_meta
-    history = price_history[tickers].dropna(how="all").ffill().dropna()
+    history = simulation_history[tickers].dropna(how="all").ffill().dropna()
     if history.empty:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), allocation_meta
 
@@ -3355,7 +3385,16 @@ def main() -> None:
                 )
 
             if backtest_df.empty:
-                st.info("Välj minst ett instrument och ett giltigt startdatum för att köra simuleringen bakåt i tiden.")
+                if not mock_assets:
+                    st.info("Välj minst ett instrument för att köra simuleringen bakåt i tiden.")
+                elif backtest_mode == "Eget datum" and (
+                    backtest_custom_start is None
+                    or backtest_custom_start < history_first_date
+                    or backtest_custom_start >= history_last_date
+                ):
+                    st.info("Välj ett giltigt startdatum för att köra simuleringen bakåt i tiden.")
+                else:
+                    st.info("Kunde inte hämta tillräcklig historik för de valda instrumenten just nu. Prova att uppdatera sidan eller välj ett annat urval.")
             else:
                 st.success(
                     f"Om du hade investerat {format_sek(mock_amount)} {backtest_summary['reference_text']}, "
@@ -3464,7 +3503,14 @@ def main() -> None:
                 )
 
             if future_asset_df.empty or future_summary_df.empty or future_path_df.empty:
-                st.info("Välj minst ett instrument och ett giltigt framtidsdatum för att skapa bootstrap-baserade simuleringar.")
+                if not mock_assets:
+                    st.info("Välj minst ett instrument för att skapa bootstrap-baserade simuleringar.")
+                elif future_mode == "Eget datum" and (
+                    future_custom_end is None or future_custom_end <= history_last_date
+                ):
+                    st.info("Välj ett giltigt framtidsdatum för att skapa bootstrap-baserade simuleringar.")
+                else:
+                    st.info("Kunde inte skapa simuleringen med de valda instrumenten just nu. Prova att uppdatera sidan eller välj en annan horisont.")
             else:
                 st.info(
                     f"Medianutfallet {future_summary['label']} är {format_sek(future_summary['median_value'])} "
