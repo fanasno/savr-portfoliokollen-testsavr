@@ -955,7 +955,6 @@ def detect_imbalances(
     threshold = settings["concentration_threshold"]
     equity_buffer = settings["equity_buffer"]
     category_gap_threshold = settings["category_gap_threshold"]
-    top_three_threshold = settings["top_three_threshold"]
     min_portfolio_sharpe = settings["min_portfolio_sharpe"]
     max_portfolio_volatility = settings["max_portfolio_volatility"]
     max_drawdown_tolerance = settings["max_drawdown_tolerance"]
@@ -965,10 +964,11 @@ def detect_imbalances(
         insights.append(
             {
                 "tone": "warning",
-                "title": f"Du är tungt viktad i {largest['name']}",
+                "title": f"Din valda gräns för {largest['name']} är passerad",
                 "body": (
                     f"Innehavet står för {format_pct(largest['current_weight_pct'])} av portföljen. "
-                    f"Det är över din koncentrationsgräns på {threshold} %."
+                    f"Det är över din egen gräns på {threshold} %. Om du vill följa din profil "
+                    "kan det vara ett bra tillfälle att se över vikten."
                 ),
             }
         )
@@ -977,10 +977,10 @@ def detect_imbalances(
         insights.append(
             {
                 "tone": "warning",
-                "title": "Aktieexponeringen är högre än din profil",
+                "title": "Aktieandelen ligger över din valda profil",
                 "body": (
                     f"Portföljen ligger på {format_pct(metrics['equity_exposure'])} aktier, "
-                    f"medan profilen {profile_name} siktar på cirka {format_pct(profile['equity_target'])}."
+                    f"medan profilen {profile_name} är satt till cirka {format_pct(profile['equity_target'])}."
                 ),
             }
         )
@@ -992,8 +992,7 @@ def detect_imbalances(
                 "title": "Den historiska Sharpekvoten är under din målnivå",
                 "body": (
                     f"Portföljens historiska Sharpe är {format_decimal_sv(metrics['portfolio_sharpe'])} "
-                    f"mot ditt mål på {format_decimal_sv(min_portfolio_sharpe)}. Det betyder att avkastningen "
-                    "inte har kompenserat för risken så väl som du önskar."
+                    f"mot ditt mål på {format_decimal_sv(min_portfolio_sharpe)}."
                 ),
             }
         )
@@ -1002,7 +1001,7 @@ def detect_imbalances(
         insights.append(
             {
                 "tone": "warning",
-                "title": "Portföljen svänger mer än din risknivå tillåter",
+                "title": "Portföljen svänger mer än din valda risknivå tillåter",
                 "body": (
                     f"Historisk volatilitet är {format_pct(metrics['portfolio_volatility_pct'])}, "
                     f"vilket är över ditt tak på {format_pct(max_portfolio_volatility)}."
@@ -1027,11 +1026,11 @@ def detect_imbalances(
         insights.append(
             {
                 "tone": "warning",
-                "title": f"Du är överviktad i {overweight['category']}",
+                "title": f"Din målvikt för {overweight['category']} överskrids",
                 "body": (
                     f"Nuvarande vikt är {format_pct(overweight['current_weight_pct'])}, "
-                    f"men målvikten är {format_pct(overweight['target_weight_pct'])}. "
-                    "Det driver upp risken utan att ge bättre spridning."
+                    f"medan din målvikt är {format_pct(overweight['target_weight_pct'])}. "
+                    "Portföljen avviker därmed från den fördelning du har valt."
                 ),
             }
         )
@@ -1041,10 +1040,11 @@ def detect_imbalances(
         insights.append(
             {
                 "tone": "info",
-                "title": f"Du har för låg vikt i {underweight['category']}",
+                "title": f"Din målvikt för {underweight['category']} underskrids",
                 "body": (
-                    f"En större andel i {underweight['name']} skulle föra portföljen närmare "
-                    f"målprofilen och förbättra balansen."
+                    f"Nuvarande vikt är {format_pct(underweight['current_weight_pct'])}, "
+                    f"medan din målvikt är {format_pct(underweight['target_weight_pct'])}. "
+                    "Det innebär att portföljen just nu ligger under din valda fördelning."
                 ),
             }
         )
@@ -1054,22 +1054,10 @@ def detect_imbalances(
         insights.append(
             {
                 "tone": "info",
-                "title": f"{weak_sharpe['name']} tynger riskjusterad avkastning",
+                "title": f"{weak_sharpe['name']} ligger under dina riskmål historiskt",
                 "body": (
                     f"Innehavet har en historisk Sharpe på {format_decimal_sv(weak_sharpe['sharpe_ratio'])} "
                     f"och väger {format_pct(weak_sharpe['current_weight_pct'])} i portföljen."
-                ),
-            }
-        )
-
-    if metrics["hhi"] > 2200 or metrics["top_three_share"] > top_three_threshold:
-        insights.append(
-            {
-                "tone": "warning",
-                "title": "Portföljen är mer koncentrerad än rekommenderat",
-                "body": (
-                    f"De tre största innehaven utgör {format_pct(metrics['top_three_share'])}. "
-                    "En bredare fördelning minskar sårbarheten om ett tema eller en marknad faller."
                 ),
             }
         )
@@ -1078,8 +1066,8 @@ def detect_imbalances(
         insights.append(
             {
                 "tone": "success",
-                "title": "Portföljen ser balanserad ut",
-                "body": "Nuvarande fördelning ligger nära dina mål och den historiska riskprofilen ser sund ut.",
+                "title": "Portföljen ligger nära dina valda nivåer",
+                "body": "Nuvarande fördelning ligger nära dina mål och de historiska riskmåtten håller sig inom dina valda ramar.",
             }
         )
 
@@ -1460,7 +1448,7 @@ def build_rebalance_notification(
         f"Just nu ligger {largest_over['category']} {format_pct(abs(largest_over['weight_gap_pct']))} "
         f"över mål, medan {largest_under['category']} ligger "
         f"{format_pct(abs(largest_under['weight_gap_pct']))} under mål. "
-        f"För att ligga i linje med profilen {profile_name} bör du {action_text}."
+        f"Om du vill ligga i linje med profilen {profile_name} kan du se över om det är läge att {action_text}."
     )
     return {
         "title": "Dags för rebalansering",
