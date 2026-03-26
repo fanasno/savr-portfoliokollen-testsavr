@@ -8,6 +8,7 @@ Det här bidraget demonstrerar två produktidéer som skulle kunna stärka SAVR:
 ## Demo
 
 - Publik app: [https://savr-portfoliokollen-testsavr.streamlit.app/](https://savr-portfoliokollen-testsavr.streamlit.app/)
+  Om appen är i viloläge på Streamlit kan det ta några sekunder innan den vaknar och laddas.
 - Videogenomgång: [https://drive.google.com/file/d/1ANp4wm1Xb4fYbysU-LIt6W1zfHU1duEU/view](https://drive.google.com/file/d/1ANp4wm1Xb4fYbysU-LIt6W1zfHU1duEU/view)
 
 Appen är byggd i Streamlit och visar hur SAVR kan hjälpa användare att:
