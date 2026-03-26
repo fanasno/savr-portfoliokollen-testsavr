@@ -3293,7 +3293,7 @@ def main() -> None:
             )
 
         max_backtest_date = max(history_first_date, history_last_date - pd.Timedelta(days=1))
-        min_future_date = history_last_date + pd.Timedelta(days=1)
+        min_future_date = (history_last_date + pd.offsets.BDay(1)).normalize()
         max_future_date = history_last_date + pd.DateOffset(years=3)
         mock_history_tab, mock_future_tab = st.tabs(["Bakåtblick", "Framåtblick"])
 
@@ -3321,6 +3321,7 @@ def main() -> None:
                     value=backtest_calendar_value.date(),
                     min_value=history_first_date.date(),
                     max_value=max_backtest_date.date(),
+                    format="DD/MM/YYYY",
                     key="mock_backtest_custom_date",
                 )
                 st.text_input(
@@ -3422,6 +3423,7 @@ def main() -> None:
                     value=future_calendar_value.date(),
                     min_value=min_future_date.date(),
                     max_value=max_future_date.date(),
+                    format="DD/MM/YYYY",
                     key="mock_future_custom_date",
                 )
                 st.text_input(
@@ -3434,6 +3436,10 @@ def main() -> None:
                 )
                 if st.session_state.mock_future_custom_text.strip() and not future_text_valid:
                     st.warning("Kunde inte tolka datumet. Skriv det som ddmmyyyy, till exempel 01122026.")
+                elif future_custom_end is not None and future_custom_end <= history_last_date:
+                    st.warning(
+                        f"Framtidsdatum måste ligga efter senaste historikdag. Välj tidigast {format_date_sv(min_future_date)}."
+                    )
                 future_horizon = st.session_state.mock_future_horizon
 
             if future_mode == "Eget datum" and (
