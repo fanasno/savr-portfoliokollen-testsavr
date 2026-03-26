@@ -1696,7 +1696,7 @@ def render_css() -> None:
     }
     .micro-kpi {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
         gap: 0.75rem;
         margin-top: 0.9rem;
     }
@@ -1705,12 +1705,21 @@ def render_css() -> None:
         border: 1px solid __BORDER__;
         padding: 0.85rem 0.9rem;
         background: #F8F8FA;
+        min-width: 0;
+        line-height: 1.45;
+        word-break: normal;
+        overflow-wrap: break-word;
+        hyphens: auto;
     }
     .micro-kpi strong {
         display: block;
-        font-size: 1.15rem;
+        font-size: 1.1rem;
         color: __INK__;
         margin-top: 0.2rem;
+        line-height: 1.35;
+        word-break: normal;
+        overflow-wrap: break-word;
+        hyphens: auto;
     }
     .mock-note {
         color: __INK_SOFT__;
@@ -2805,18 +2814,6 @@ def main() -> None:
                 f"Du har satt målvikter som summerar till {format_pct(selected_profile_config['raw_weight_total'])}. "
                 "Appen normaliserar dem automatiskt till 100 % innan analysen körs."
             )
-    else:
-        st.markdown(
-            """
-            <div class="panel">
-                <strong>Läge:</strong> TestSAVR<br>
-                <strong>Syfte:</strong> Testa idéer, se historisk utveckling och förstå risk utan verkligt kapital.<br>
-                <span class="small-note">Det här läget fokuserar på pedagogik och simulering med riktig historik samt scenario-baserad framåtblick.</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
     st.write("")
     source_col_1, source_col_2, source_col_3 = st.columns(3, gap="large")
     source_col_1.markdown(
