@@ -2287,6 +2287,7 @@ def load_market_context(
     )
     return {
         "full_price_history": full_price_history,
+        "analysis_history": analysis_history,
         "portfolio": portfolio,
         "watchlist": watchlist,
         "instrument_universe": instrument_universe,
@@ -2495,6 +2496,7 @@ def main() -> None:
         float(st.session_state.risk_free_rate_pct),
     )
     full_price_history = market_context["full_price_history"]
+    analysis_history = market_context["analysis_history"]
     portfolio = market_context["portfolio"]
     watchlist = market_context["watchlist"]
     instrument_universe = market_context["instrument_universe"]
