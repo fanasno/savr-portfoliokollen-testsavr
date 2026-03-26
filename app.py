@@ -2209,6 +2209,8 @@ def normalize_legacy_state() -> None:
         st.session_state.profile_name = "Försiktig profil"
     if st.session_state.get("mock_rebalance_mode") == "Köp och behåll":
         st.session_state.mock_rebalance_mode = "Buy and hold"
+    if st.session_state.get("mock_source") not in {None, "Egna instrument", "Portfölj från Portföljkollen"}:
+        st.session_state.mock_source = "Egna instrument"
     if st.session_state.get("rebalancer_header_chip") in {"Rebalansering", "Smart Rebalancer"}:
         st.session_state.rebalancer_header_chip = "Portföljkollen"
     if st.session_state.get("testinvest_header_chip") == "Testinvest":
@@ -2243,6 +2245,7 @@ def initialize_session_state(
             "rebalance_interval": "Månadsvis",
             "watch_active": False,
             "rebalance_active": False,
+            "mock_source": "Egna instrument",
             "mock_assets": ["Apple", "Microsoft", "Investor B"],
             "mock_amount": 10000,
             "mock_backtest_interval": "1 månad bakåt",
@@ -3369,13 +3372,44 @@ def main() -> None:
         st.caption(
             "Prova hur ett belopp hade utvecklats över tid och hur olika fördelningar och rebalanseringar kan påverka framtida utfall."
         )
+        portfolio_simulation_assets = portfolio_df["name"].tolist()
+        portfolio_simulation_weights = {
+            row["name"]: float(row["current_weight_pct"])
+            for _, row in portfolio_df[["name", "current_weight_pct"]].iterrows()
+        }
 
-        mock_assets = st.multiselect(
-            "Vilka instrument ska ingå i simuleringen?",
-            options=instrument_universe["company_name"].tolist(),
-            default=st.session_state.mock_assets,
+        mock_source = st.radio(
+            "Vad vill du simulera?",
+            options=["Egna instrument", "Portfölj från Portföljkollen"],
+            index=0 if st.session_state.mock_source == "Egna instrument" else 1,
+            horizontal=True,
         )
-        st.session_state.mock_assets = mock_assets
+        st.session_state.mock_source = mock_source
+
+        if mock_source == "Egna instrument":
+            mock_assets = st.multiselect(
+                "Vilka instrument ska ingå i simuleringen?",
+                options=instrument_universe["company_name"].tolist(),
+                default=st.session_state.mock_assets,
+            )
+            st.session_state.mock_assets = mock_assets
+        else:
+            mock_assets = portfolio_simulation_assets
+            st.info(
+                "TestSAVR använder nu samma innehav som i Portföljkollen. Du kan därmed granska den aktuella portföljen både bakåt i tiden och i framtidssimuleringen."
+            )
+            portfolio_selection_display = portfolio_df[
+                ["name", "ticker", "current_weight_pct"]
+            ].copy()
+            portfolio_selection_display.columns = [
+                "Innehav från Portföljkollen",
+                "Ticker",
+                "Nuvarande vikt",
+            ]
+            portfolio_selection_display["Nuvarande vikt"] = portfolio_selection_display[
+                "Nuvarande vikt"
+            ].map(format_pct)
+            st.dataframe(portfolio_selection_display, use_container_width=True, hide_index=True)
 
         mock_config_col, mock_summary_col = st.columns([1.1, 0.9], gap="large")
         with mock_config_col:
@@ -3388,10 +3422,15 @@ def main() -> None:
             )
             st.session_state.mock_amount = mock_amount
 
+            available_weight_modes = ["Likavikt", "Anpassad"]
+            if mock_source == "Portfölj från Portföljkollen":
+                available_weight_modes = ["Nuvarande portföljvikter", *available_weight_modes]
+            if st.session_state.mock_weight_mode not in available_weight_modes:
+                st.session_state.mock_weight_mode = available_weight_modes[0]
             mock_weight_mode = st.radio(
                 "Hur ska beloppet fördelas?",
-                options=["Likavikt", "Anpassad"],
-                index=0 if st.session_state.mock_weight_mode == "Likavikt" else 1,
+                options=available_weight_modes,
+                index=available_weight_modes.index(st.session_state.mock_weight_mode),
                 horizontal=True,
             )
             st.session_state.mock_weight_mode = mock_weight_mode
@@ -3406,7 +3445,12 @@ def main() -> None:
             st.caption(get_mock_rebalance_modes()[mock_rebalance_mode]["description"])
 
             raw_mock_weights = {}
-            if mock_weight_mode == "Likavikt":
+            if mock_weight_mode == "Nuvarande portföljvikter":
+                raw_mock_weights = portfolio_simulation_weights.copy()
+                st.caption(
+                    "Beloppet fördelas efter de nuvarande vikterna i Portföljkollen, så att TestSAVR kan användas för att analysera samma portföljhistorik och framtidsscenarier."
+                )
+            elif mock_weight_mode == "Likavikt":
                 raw_mock_weights = {asset: 1.0 for asset in mock_assets}
             else:
                 st.markdown("**Sätt egen vikt per instrument**")
@@ -3447,6 +3491,10 @@ def main() -> None:
                         <div>
                             Belopp
                             <strong>{format_sek(mock_amount)}</strong>
+                        </div>
+                        <div>
+                            Källa
+                            <strong>{mock_source}</strong>
                         </div>
                         <div>
                             Antal instrument
