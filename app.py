@@ -83,75 +83,147 @@ def format_date_sv(timestamp: pd.Timestamp) -> str:
     return f"{ts.day} {month_names[ts.month]} {ts.year}"
 
 
-def load_live_portfolio_template() -> pd.DataFrame:
-    data = [
+def get_category_instrument_catalog() -> dict[str, list[dict]]:
+    return {
+        "Globalfond": [
+            {"ticker": "VT", "name": "Vanguard Total World Stock ETF", "currency": "USD"},
+            {"ticker": "ACWI", "name": "iShares MSCI ACWI ETF", "currency": "USD"},
+            {"ticker": "URTH", "name": "iShares MSCI World ETF", "currency": "USD"},
+        ],
+        "Sverigefond": [
+            {"ticker": "EWD", "name": "iShares MSCI Sweden ETF", "currency": "USD"},
+            {"ticker": "FLSW", "name": "Franklin FTSE Sweden ETF", "currency": "USD"},
+        ],
+        "Teknikfond": [
+            {"ticker": "XLK", "name": "Technology Select Sector SPDR Fund", "currency": "USD"},
+            {"ticker": "VGT", "name": "Vanguard Information Technology ETF", "currency": "USD"},
+            {"ticker": "IYW", "name": "iShares U.S. Technology ETF", "currency": "USD"},
+        ],
+        "Tillväxtmarknad": [
+            {"ticker": "IEMG", "name": "iShares Core MSCI Emerging Markets ETF", "currency": "USD"},
+            {"ticker": "VWO", "name": "Vanguard FTSE Emerging Markets ETF", "currency": "USD"},
+            {"ticker": "EEM", "name": "iShares MSCI Emerging Markets ETF", "currency": "USD"},
+        ],
+        "Småbolagsfond": [
+            {"ticker": "IWM", "name": "iShares Russell 2000 ETF", "currency": "USD"},
+            {"ticker": "VB", "name": "Vanguard Small-Cap ETF", "currency": "USD"},
+            {"ticker": "SCHA", "name": "Schwab U.S. Small-Cap ETF", "currency": "USD"},
+        ],
+        "Räntefond": [
+            {"ticker": "BND", "name": "Vanguard Total Bond Market ETF", "currency": "USD"},
+            {"ticker": "AGG", "name": "iShares Core U.S. Aggregate Bond ETF", "currency": "USD"},
+            {"ticker": "SCHZ", "name": "Schwab U.S. Aggregate Bond ETF", "currency": "USD"},
+        ],
+    }
+
+
+def get_default_category_instrument_map() -> dict[str, str]:
+    return {
+        category: options[0]["ticker"] for category, options in get_category_instrument_catalog().items()
+    }
+
+
+def get_category_instrument_lookup() -> dict[str, dict]:
+    lookup = {}
+    for category, options in get_category_instrument_catalog().items():
+        for option in options:
+            lookup[option["ticker"]] = {**option, "category": category}
+    return lookup
+
+
+def get_portfolio_category_blueprint() -> list[dict]:
+    return [
         {
-            "name": "Technology Select Sector SPDR Fund",
-            "ticker": "XLK",
-            "units": 70,
-            "currency": "USD",
+            "category": "Teknikfond",
             "fallback_value_sek": 165000,
             "fallback_last_review_value_sek": 150000,
-            "category": "Teknikfond",
             "asset_type": "Aktiefond",
             "risk_level": 6.7,
         },
         {
-            "name": "Vanguard Total World Stock ETF",
-            "ticker": "VT",
-            "units": 120,
-            "currency": "USD",
+            "category": "Globalfond",
             "fallback_value_sek": 150000,
             "fallback_last_review_value_sek": 147000,
-            "category": "Globalfond",
             "asset_type": "Aktiefond",
             "risk_level": 4.1,
         },
         {
-            "name": "iShares MSCI Sweden ETF",
-            "ticker": "EWD",
-            "units": 100,
-            "currency": "USD",
+            "category": "Sverigefond",
             "fallback_value_sek": 55000,
             "fallback_last_review_value_sek": 56000,
-            "category": "Sverigefond",
             "asset_type": "Aktiefond",
             "risk_level": 5.1,
         },
         {
-            "name": "iShares Core MSCI Emerging Markets ETF",
-            "ticker": "IEMG",
-            "units": 80,
-            "currency": "USD",
+            "category": "Tillväxtmarknad",
             "fallback_value_sek": 40000,
             "fallback_last_review_value_sek": 38000,
-            "category": "Tillväxtmarknad",
             "asset_type": "Aktiefond",
             "risk_level": 6.0,
         },
         {
-            "name": "iShares Russell 2000 ETF",
-            "ticker": "IWM",
-            "units": 15,
-            "currency": "USD",
+            "category": "Småbolagsfond",
             "fallback_value_sek": 30000,
             "fallback_last_review_value_sek": 28000,
-            "category": "Småbolagsfond",
             "asset_type": "Aktiefond",
             "risk_level": 6.3,
         },
         {
-            "name": "Vanguard Total Bond Market ETF",
-            "ticker": "BND",
-            "units": 30,
-            "currency": "USD",
+            "category": "Räntefond",
             "fallback_value_sek": 20000,
             "fallback_last_review_value_sek": 22000,
-            "category": "Räntefond",
             "asset_type": "Räntefond",
             "risk_level": 1.8,
         },
     ]
+
+
+def get_category_instrument_label(ticker: str) -> str:
+    instrument = get_category_instrument_lookup().get(ticker)
+    if instrument is None:
+        return ticker
+    return f"{instrument['name']} ({ticker})"
+
+
+def get_active_category_instrument_map(selected_profile: str, category_order: list[str]) -> dict[str, str]:
+    default_map = get_default_category_instrument_map()
+    lookup = get_category_instrument_lookup()
+    if selected_profile != "Egen profil":
+        return dict(default_map)
+
+    active_map = {}
+    for category in category_order:
+        state_key = f"category_instrument_{category}"
+        candidate = st.session_state.get(state_key, default_map[category])
+        instrument = lookup.get(candidate)
+        if instrument is None or instrument["category"] != category:
+            candidate = default_map[category]
+        active_map[category] = candidate
+    return active_map
+
+
+def load_live_portfolio_template(selected_instruments: dict[str, str] | None = None) -> pd.DataFrame:
+    selected_instruments = selected_instruments or get_default_category_instrument_map()
+    instrument_lookup = get_category_instrument_lookup()
+    default_map = get_default_category_instrument_map()
+    data = []
+    for blueprint in get_portfolio_category_blueprint():
+        category = blueprint["category"]
+        ticker = selected_instruments.get(category, default_map[category])
+        instrument = instrument_lookup.get(ticker, instrument_lookup[default_map[category]])
+        data.append(
+            {
+                "name": instrument["name"],
+                "ticker": instrument["ticker"],
+                "units": np.nan,
+                "currency": instrument["currency"],
+                "fallback_value_sek": blueprint["fallback_value_sek"],
+                "fallback_last_review_value_sek": blueprint["fallback_last_review_value_sek"],
+                "category": category,
+                "asset_type": blueprint["asset_type"],
+                "risk_level": blueprint["risk_level"],
+            }
+        )
     return pd.DataFrame(data)
 
 
@@ -260,28 +332,70 @@ def convert_market_value_to_sek(
     return current_value, reference_value
 
 
+def derive_units_from_fallback_values(
+    price_series: pd.Series,
+    fx_series: pd.Series | None,
+    fallback_current: float,
+    fallback_reference: float,
+    reference_days: int = 21,
+) -> float:
+    current_price = get_latest_series_value(price_series, np.nan)
+    reference_price = get_reference_series_value(price_series, reference_days, np.nan)
+    current_fx = 1.0 if fx_series is None else get_latest_series_value(fx_series, np.nan)
+    reference_fx = (
+        1.0 if fx_series is None else get_reference_series_value(fx_series, reference_days, np.nan)
+    )
+
+    if not np.isnan(reference_price) and not np.isnan(reference_fx):
+        reference_denominator = reference_price * reference_fx
+        if reference_denominator:
+            return float(fallback_reference / reference_denominator)
+
+    if not np.isnan(current_price) and not np.isnan(current_fx):
+        current_denominator = current_price * current_fx
+        if current_denominator:
+            return float(fallback_current / current_denominator)
+
+    return np.nan
+
+
 def build_live_portfolio_values(portfolio_template: pd.DataFrame, price_history: pd.DataFrame) -> pd.DataFrame:
     portfolio = portfolio_template.copy()
     current_values = []
     reference_values = []
     data_sources = []
+    resolved_units = []
     for _, row in portfolio.iterrows():
         price_series = price_history[row["ticker"]] if row["ticker"] in price_history.columns else pd.Series(dtype=float)
         fx_ticker = get_currency_fx_ticker(row["currency"])
         fx_series = price_history[fx_ticker] if fx_ticker and fx_ticker in price_history.columns else None
-        current_value, reference_value = convert_market_value_to_sek(
-            units=float(row["units"]),
-            price_series=price_series,
-            fx_series=fx_series,
-            fallback_current=float(row["fallback_value_sek"]),
-            fallback_reference=float(row["fallback_last_review_value_sek"]),
-        )
+        units = float(row["units"]) if pd.notna(row["units"]) else np.nan
+        if np.isnan(units) or units <= 0:
+            units = derive_units_from_fallback_values(
+                price_series=price_series,
+                fx_series=fx_series,
+                fallback_current=float(row["fallback_value_sek"]),
+                fallback_reference=float(row["fallback_last_review_value_sek"]),
+            )
+        if np.isnan(units) or units <= 0:
+            current_value = float(row["fallback_value_sek"])
+            reference_value = float(row["fallback_last_review_value_sek"])
+        else:
+            current_value, reference_value = convert_market_value_to_sek(
+                units=units,
+                price_series=price_series,
+                fx_series=fx_series,
+                fallback_current=float(row["fallback_value_sek"]),
+                fallback_reference=float(row["fallback_last_review_value_sek"]),
+            )
         current_values.append(current_value)
         reference_values.append(reference_value)
         data_sources.append("Marknadsdata" if not price_series.dropna().empty else "Beräknat värde")
+        resolved_units.append(units if not np.isnan(units) else 0.0)
     portfolio["value_sek"] = current_values
     portfolio["last_review_value_sek"] = reference_values
     portfolio["data_source"] = data_sources
+    portfolio["units"] = resolved_units
     return portfolio
 
 
@@ -547,6 +661,7 @@ def apply_profile_defaults(profile_name: str) -> None:
         st.session_state.selected_profile = "Egen profil"
         return
     base_profile = get_risk_profiles()[profile_name]
+    default_instruments = get_default_category_instrument_map()
     current_profile_name = str(st.session_state.get("profile_name", "")).strip()
     default_profile_names = {f"{name} profil" for name in get_risk_profiles()} | {"Min profil"}
     st.session_state.selected_profile = profile_name
@@ -563,6 +678,8 @@ def apply_profile_defaults(profile_name: str) -> None:
     st.session_state.max_drawdown_tolerance = float(base_profile["max_drawdown_tolerance"])
     for category, weight in base_profile["target_weights"].items():
         st.session_state[f"target_weight_{category}"] = float(weight)
+    for category, ticker in default_instruments.items():
+        st.session_state[f"category_instrument_{category}"] = ticker
 
 
 def handle_profile_selection_change() -> None:
@@ -2104,6 +2221,7 @@ def initialize_session_state(
     default_backtest_date: pd.Timestamp,
     default_future_date: pd.Timestamp,
 ) -> None:
+    default_instruments = get_default_category_instrument_map()
     set_session_defaults(
         {
             "profile_name": "Min profil",
@@ -2151,6 +2269,9 @@ def initialize_session_state(
         weight_key = f"target_weight_{category}"
         if weight_key not in st.session_state:
             st.session_state[weight_key] = float(default_profile["target_weights"][category])
+        instrument_key = f"category_instrument_{category}"
+        if instrument_key not in st.session_state:
+            st.session_state[instrument_key] = default_instruments[category]
 
     normalize_legacy_state()
 
@@ -2281,14 +2402,18 @@ def load_market_context(
     analysis_window: str,
     risk_free_rate_pct: float,
 ) -> dict:
+    category_instrument_lookup = get_category_instrument_lookup()
     fx_tickers = get_fx_tickers(
-        portfolio_template["currency"].tolist() + watchlist_template["currency"].tolist()
+        portfolio_template["currency"].tolist()
+        + watchlist_template["currency"].tolist()
+        + [instrument["currency"] for instrument in category_instrument_lookup.values()]
     )
     all_tickers = tuple(
         sorted(
             set(
                 portfolio_template["ticker"].tolist()
                 + watchlist_template["ticker"].tolist()
+                + list(category_instrument_lookup.keys())
                 + list(fx_tickers)
             )
         )
@@ -2491,11 +2616,10 @@ def main() -> None:
 
     profiles = get_risk_profiles()
     notification_intervals = get_notification_intervals()
-    portfolio_template = load_live_portfolio_template()
-    watchlist_template = load_live_watchlist_template()
     category_order = list(profiles["Balanserad"]["target_weights"].keys())
     default_profile = profiles["Balanserad"]
     analysis_windows = get_analysis_windows()
+    default_category_instruments = get_default_category_instrument_map()
     set_session_defaults(
         {
             "profile_name": "Min profil",
@@ -2512,9 +2636,20 @@ def main() -> None:
             "max_drawdown_tolerance": float(default_profile["max_drawdown_tolerance"]),
             "active_module": "Rebalansering",
             "selected_profile": "Balanserad",
+            **{
+                f"category_instrument_{category}": ticker
+                for category, ticker in default_category_instruments.items()
+            },
         }
     )
     normalize_legacy_state()
+
+    active_category_instruments = get_active_category_instrument_map(
+        st.session_state.selected_profile,
+        category_order,
+    )
+    portfolio_template = load_live_portfolio_template(active_category_instruments)
+    watchlist_template = load_live_watchlist_template()
 
     market_context = load_market_context(
         portfolio_template,
@@ -2803,16 +2938,20 @@ def main() -> None:
                 )
 
         with settings_weight_tab:
+            category_instrument_catalog = get_category_instrument_catalog()
             current_target_total = sum(
                 float(st.session_state[f"target_weight_{category}"]) for category in category_order
             )
             st.caption(
-                f"{'Sätt egna målvikter per kategori.' if custom_profile_enabled else 'Standardprofilen visar sina låsta målvikter här.'} "
+                f"{'Sätt egna målvikter per kategori och välj vilket verkligt instrument som ska representera varje del.' if custom_profile_enabled else 'Standardprofilen visar sina låsta målvikter och sina förvalda verkliga instrument här.'} "
                 f"Summan är just nu {format_pct(current_target_total)} och normaliseras automatiskt till 100 % i analysen."
             )
             weight_cols = st.columns(2, gap="large")
             for index, category in enumerate(category_order):
                 with weight_cols[index % 2]:
+                    instrument_key = f"category_instrument_{category}"
+                    if not custom_profile_enabled:
+                        st.session_state[instrument_key] = default_category_instruments[category]
                     st.number_input(
                         category,
                         min_value=0.0,
@@ -2821,10 +2960,17 @@ def main() -> None:
                         key=f"target_weight_{category}",
                         disabled=not custom_profile_enabled,
                     )
+                    st.selectbox(
+                        f"Verkligt instrument för {category}",
+                        options=[option["ticker"] for option in category_instrument_catalog[category]],
+                        key=instrument_key,
+                        format_func=get_category_instrument_label,
+                        disabled=not custom_profile_enabled,
+                    )
             st.caption(
-                "Standardprofilerna använder låsta målvikter. Växla till Egen profil om du vill sätta vikterna själv."
+                "Standardprofilerna använder låsta målvikter och förvalda instrument. Växla till Egen profil om du vill sätta både vikt och instrument själv."
                 if not custom_profile_enabled
-                else "Din egen profil använder de vikter du sätter här, och analysen uppdateras direkt."
+                else "Din egen profil använder de vikter och instrument du sätter här, och analysen uppdateras direkt."
             )
 
         if abs(selected_profile_config["raw_weight_total"] - 100) > 0.01:
